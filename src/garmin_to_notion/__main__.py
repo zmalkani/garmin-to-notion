@@ -52,8 +52,21 @@ def main() -> None:
     require_garmin = args.command not in ("cleanup", "summary")
     settings = load_settings(require_garmin=require_garmin)
 
-    # Auto-discover database IDs from Notion if any are missing
-    if not settings.has_all_db_ids:
+    # Auto-discover only the database IDs needed by the selected command.
+    required_db_fields = {
+        "activities": ["activities_db_id"],
+        "records": ["pr_db_id"],
+        "steps": ["steps_db_id"],
+        "sleep": ["sleep_db_id"],
+        "workouts": ["workouts_db_id"],
+        "summary": ["summary_db_id"],
+        "all": [
+            "activities_db_id", "pr_db_id", "steps_db_id",
+            "sleep_db_id", "workouts_db_id", "summary_db_id",
+        ],
+    }
+    needed_fields = required_db_fields[args.command]
+    if any(not getattr(settings, field) for field in needed_fields):
         from notion_client import Client as NotionClient
         from garmin_to_notion.notion_helpers import discover_databases
 
