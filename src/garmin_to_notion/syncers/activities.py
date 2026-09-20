@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from datetime import datetime, timedelta
 
 from garminconnect import Garmin as GarminClient
@@ -10,6 +11,7 @@ from notion_client import Client as NotionClient
 
 from garmin_to_notion.config import Settings
 from garmin_to_notion.formatters import gmt_to_local
+from garmin_to_notion.notion_helpers import fetch_all_pages
 
 logger = logging.getLogger(__name__)
 
@@ -144,6 +146,19 @@ def sync_activities(
     activities = garmin.get_activities(0, settings.fetch_limit)
     logger.info("Fetched %d activities from Garmin", len(activities))
 
+    # Load existing Garmin IDs once instead of querying Notion for every activity.
+    existing_pages = fetch_all_pages(
+        notion,
+        settings.activities_db_id,
+        filter={"property": "Garmin ID", "number": {"is_not_empty": True}},
+    )
+    existing_ids = {
+        page.get("properties", {}).get("Garmin ID", {}).get("number")
+        for page in existing_pages
+    }
+    existing_ids.discard(None)
+    logger.info("Found %d existing Garmin activities in Notion", len(existing_ids))
+
     created = updated = skipped = 0
 
     for activity in activities:
@@ -153,26 +168,18 @@ def sync_activities(
             activity.get("startTimeGMT"), settings.timezone
         )
 
-        existing = _activity_exists(
-            notion,
-            settings.activities_db_id,
-            activity_id,
-            activity_date,
-            activity_name,
-        )
+        if activity_id in existing_ids:
+            skipped += 1
+            continue
 
-        if existing:
-            notion.pages.update(
-                page_id=existing["id"],
-                properties=_build_properties(activity, settings),
-            )
-            updated += 1
-        else:
-            notion.pages.create(
-                parent={"database_id": settings.activities_db_id},
-                properties=_build_properties(activity, settings),
-            )
-            created += 1
+        notion.pages.create(
+            parent={"database_id": settings.activities_db_id},
+            properties=_build_properties(activity, settings),
+        )
+        existing_ids.add(activity_id)
+        created += 1
+        # Notion's API is rate limited to roughly 3 requests/second.
+        time.sleep(0.4)
 
     logger.info(
         "Training log sync complete: %d created, %d updated, %d unchanged",
