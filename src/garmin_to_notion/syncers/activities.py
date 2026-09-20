@@ -77,13 +77,19 @@ def _build_properties(activity: dict, settings: Settings) -> dict:
     activity_name = activity.get("activityName", "Unnamed Activity")
     activity_type = _garmin_type(activity)
 
-    local_date = gmt_to_local(activity.get("startTimeGMT"), settings.timezone)
+    local_start = gmt_to_local(activity.get("startTimeGMT"), settings.timezone)
     duration_seconds = float(activity.get("duration") or 0)
+    local_end = local_start + timedelta(seconds=duration_seconds)
     distance_km = round(float(activity.get("distance") or 0) / 1000, 2)
 
     props = {
         "Name": {"title": [{"text": {"content": activity_name}}]},
-        "Date": {"date": {"start": local_date.isoformat()}},
+        "Date": {
+            "date": {
+                "start": local_start.isoformat(),
+                "end": local_end.isoformat(),
+            }
+        },
         "Dist. (km)": {"number": distance_km},
         "volume (h)": {"number": round(duration_seconds / 3600, 4)},
         "Garmin ID": {"number": activity_id},
@@ -98,43 +104,13 @@ def _build_properties(activity: dict, settings: Settings) -> dict:
     return props
 
 
-def _activity_exists(
-    notion: NotionClient,
-    database_id: str,
-    garmin_id: int | None,
-    activity_date: datetime,
-    activity_name: str,
-) -> dict | None:
-    """Find an existing page primarily by Garmin ID, then by date + name."""
-    if garmin_id:
-        query = notion.databases.query(
-            database_id=database_id,
-            filter={"property": "Garmin ID", "number": {"equals": garmin_id}},
-        )
-        if query["results"]:
-            return query["results"][0]
-
-    query = notion.databases.query(
-        database_id=database_id,
-        filter={
-            "and": [
-                {
-                    "property": "Date",
-                    "date": {
-                        "on_or_after": (activity_date - timedelta(minutes=5)).isoformat()
-                    },
-                },
-                {
-                    "property": "Date",
-                    "date": {
-                        "on_or_before": (activity_date + timedelta(minutes=5)).isoformat()
-                    },
-                },
-                {"property": "Name", "title": {"equals": activity_name}},
-            ]
-        },
+def _date_needs_update(page: dict, expected: dict) -> bool:
+    date_prop = page.get("properties", {}).get("Date", {})
+    current = date_prop.get("date") or {}
+    return (
+        current.get("start") != expected["start"]
+        or current.get("end") != expected["end"]
     )
-    return query["results"][0] if query["results"] else None
 
 
 def sync_activities(
@@ -146,7 +122,6 @@ def sync_activities(
     activities = garmin.get_activities(0, settings.fetch_limit)
     logger.info("Fetched %d activities from Garmin", len(activities))
 
-    # Load existing Garmin IDs once instead of querying Notion for every activity.
     existing_pages = fetch_all_pages(
         notion,
         settings.activities_db_id,
@@ -157,28 +132,37 @@ def sync_activities(
         for page in existing_pages
     }
     existing_ids.discard(None)
+    pages_by_id = {
+        page.get("properties", {}).get("Garmin ID", {}).get("number"): page
+        for page in existing_pages
+    }
     logger.info("Found %d existing Garmin activities in Notion", len(existing_ids))
 
     created = updated = skipped = 0
 
     for activity in activities:
         activity_id = activity.get("activityId")
-        activity_name = activity.get("activityName", "Unnamed Activity")
-        activity_date = gmt_to_local(
-            activity.get("startTimeGMT"), settings.timezone
-        )
+        properties = _build_properties(activity, settings)
 
         if activity_id in existing_ids:
-            skipped += 1
+            page = pages_by_id.get(activity_id)
+            if page and _date_needs_update(page, properties["Date"]["date"]):
+                notion.pages.update(
+                    page_id=page["id"],
+                    properties={"Date": properties["Date"]},
+                )
+                updated += 1
+                time.sleep(0.4)
+            else:
+                skipped += 1
             continue
 
         notion.pages.create(
             parent={"database_id": settings.activities_db_id},
-            properties=_build_properties(activity, settings),
+            properties=properties,
         )
         existing_ids.add(activity_id)
         created += 1
-        # Notion's API is rate limited to roughly 3 requests/second.
         time.sleep(0.4)
 
     logger.info(
