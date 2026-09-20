@@ -11,6 +11,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# Existing Notion database: NEW training log
+DEFAULT_ACTIVITIES_DB_ID = "3e1382a3-8814-80a7-b1c8-fd71dbda2d5f"
+
 
 @dataclass(frozen=True)
 class Settings:
@@ -29,7 +32,6 @@ class Settings:
 
     @property
     def has_all_db_ids(self) -> bool:
-        """Check if all database IDs are configured."""
         return all([
             self.activities_db_id,
             self.pr_db_id,
@@ -39,8 +41,7 @@ class Settings:
             self.summary_db_id,
         ])
 
-    def with_discovered_ids(self, discovered: dict[str, str]) -> Settings:
-        """Return a new Settings with missing DB IDs filled from discovered mapping."""
+    def with_discovered_ids(self, discovered: dict[str, str]) -> "Settings":
         overrides = {}
         for field in (
             "activities_db_id", "pr_db_id", "steps_db_id",
@@ -56,7 +57,6 @@ class Settings:
 
 
 def load_settings(require_garmin: bool = True) -> Settings:
-    """Load and validate all configuration from environment variables."""
     required = ["NOTION_TOKEN"]
     if require_garmin:
         required += ["GARMIN_EMAIL", "GARMIN_PASSWORD"]
@@ -67,24 +67,24 @@ def load_settings(require_garmin: bool = True) -> Settings:
         print("Copy .env.example to .env and fill in your values.")
         sys.exit(1)
 
-    tz_name = os.getenv("TIMEZONE", "UTC")
+    tz_name = os.getenv("TIMEZONE", "America/Toronto")
     try:
         timezone = ZoneInfo(tz_name)
     except (KeyError, ValueError):
-        print(f"Error: Invalid timezone '{tz_name}'. Use IANA format (e.g. America/Sao_Paulo).")
+        print(f"Error: Invalid timezone '{tz_name}'. Use IANA format (e.g. America/Toronto).")
         sys.exit(1)
 
     return Settings(
         garmin_email=os.getenv("GARMIN_EMAIL", ""),
         garmin_password=os.getenv("GARMIN_PASSWORD", ""),
         notion_token=os.environ["NOTION_TOKEN"],
-        activities_db_id=os.getenv("NOTION_DB_ID"),
+        activities_db_id=os.getenv("NOTION_DB_ID", DEFAULT_ACTIVITIES_DB_ID),
         pr_db_id=os.getenv("NOTION_PR_DB_ID"),
         steps_db_id=os.getenv("NOTION_STEPS_DB_ID"),
         sleep_db_id=os.getenv("NOTION_SLEEP_DB_ID"),
         workouts_db_id=os.getenv("NOTION_WORKOUTS_DB_ID"),
         summary_db_id=os.getenv("NOTION_SUMMARY_DB_ID"),
         timezone=timezone,
-        fetch_limit=int(os.getenv("GARMIN_ACTIVITIES_FETCH_LIMIT", "1000")),
+        fetch_limit=int(os.getenv("GARMIN_ACTIVITIES_FETCH_LIMIT", "100")),
         days_back=int(os.getenv("GARMIN_DAYS_BACK", "30")),
     )
