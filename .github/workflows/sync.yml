@@ -1,8 +1,9 @@
 name: Garmin to Notion Sync
 
 on:
+  # 3x/day keeps us well under Garmin's API rate limits (429s seen when run hourly)
   schedule:
-    - cron: '0 * * * *'
+    - cron: '0 6,14,22 * * *'
   workflow_dispatch:
 
 jobs:

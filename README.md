@@ -1,6 +1,6 @@
 # Garmin to Notion
 
-Sync your Garmin fitness data to beautiful Notion databases — activities, personal records, steps, sleep, workouts, and monthly summaries. Fully automated via GitHub Actions, 3 times a day.
+Sync your Garmin fitness data to beautiful Notion databases — activities, personal records, steps, sleep, workouts, and monthly summaries. Fully automated via GitHub Actions, 3 times a day (6am / 2pm / 10pm UTC).
 
 ![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue)
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
@@ -69,7 +69,7 @@ Go to **Settings → Secrets and variables → Actions → Variables** and add:
 
 Go to the **Actions** tab → **Garmin to Notion Sync** → **Run workflow**.
 
-Your data will appear in Notion within a few minutes. After that, the sync runs automatically 3 times a day.
+Your data will appear in Notion within a few minutes. After that, the sync runs automatically 3 times a day (6am, 2pm, 10pm UTC).
 
 ## How It Works
 
@@ -187,6 +187,16 @@ src/garmin_to_notion/
 ```
 
 ## Troubleshooting
+
+### Sync fails with "429 Too Many Requests"
+Garmin rate-limits API calls per account/IP. This happens when the sync runs too often (e.g. hourly) — every run exchanges an OAuth2 token, and repeated hourly exchanges trip the limit, after which every hourly retry keeps it tripped.
+
+To recover:
+1. **Pause the schedule for ~24 hours** — go to **Actions → Garmin to Notion Sync → ⋯ → Disable workflow**, then re-enable it the next day. This lets Garmin's rate limit reset.
+2. **Keep the default 3x/day schedule** (`0 6,14,22 * * *`). Avoid running more often than that.
+3. If it still fails after the cooldown, regenerate your tokens locally (`python scripts/generate_tokens.py`) and update the `GARMIN_TOKENS` secret.
+
+Transient 429s are retried automatically with backoff; if Garmin is still limiting after the retries, that run is skipped with a warning (not a failure) and the next scheduled run tries again.
 
 ### Charts show errors
 Run the Notion AI update prompt ([`docs/notion-ai-update-prompt.txt`](docs/notion-ai-update-prompt.txt)) to recreate all views and charts. Make sure your databases have data first — charts won't render on empty databases.
