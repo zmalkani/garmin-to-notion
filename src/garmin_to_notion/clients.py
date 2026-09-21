@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import functools
 import json
 import logging
 import os
@@ -10,6 +11,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
+import requests
 from garminconnect import Garmin as GarminClient
 from notion_client import Client as NotionClient
 
@@ -19,11 +21,64 @@ logger = logging.getLogger(__name__)
 
 TOKENSTORE_DIR = Path(os.getenv("GARMIN_TOKENSTORE", "~/.garmin_tokens")).expanduser()
 
+# Retry settings for transient Garmin rate limits (HTTP 429)
+GARMIN_429_MAX_RETRIES = 3
+GARMIN_429_BASE_WAIT = 60  # seconds; wait grows linearly per attempt
+
+
+class GarminRateLimitError(Exception):
+    """Raised when Garmin keeps rate-limiting (429) after all retries."""
+
 
 @dataclass
 class Clients:
     garmin: GarminClient
     notion: NotionClient
+
+
+def _is_rate_limit(exc: BaseException) -> bool:
+    """Check if an exception is a Garmin HTTP 429 rate-limit error."""
+    return isinstance(exc, requests.exceptions.HTTPError) and "429" in str(exc)
+
+
+def _with_429_retry(func):
+    """Retry a Garmin API call on HTTP 429 with linear backoff.
+
+    Raises GarminRateLimitError if Garmin is still rate-limiting after all
+    retries, so callers can treat it as a skipped run instead of a crash.
+    """
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        for attempt in range(1, GARMIN_429_MAX_RETRIES + 1):
+            try:
+                return func(*args, **kwargs)
+            except Exception as e:
+                if _is_rate_limit(e) and attempt < GARMIN_429_MAX_RETRIES:
+                    wait = GARMIN_429_BASE_WAIT * attempt
+                    logger.warning(
+                        "Garmin rate limited (429) on %s (attempt %d/%d), waiting %ds...",
+                        func.__name__, attempt, GARMIN_429_MAX_RETRIES, wait,
+                    )
+                    time.sleep(wait)
+                elif _is_rate_limit(e):
+                    raise GarminRateLimitError(str(e)) from e
+                else:
+                    raise
+        return None  # unreachable
+
+    return wrapper
+
+
+def _wrap_garmin_retries(garmin: GarminClient) -> GarminClient:
+    """Wrap common Garmin API methods with 429 retry/backoff."""
+    for name in (
+        "get_activities", "get_daily_steps", "get_sleep_data",
+        "get_personal_record", "connectapi",
+    ):
+        method = getattr(garmin, name, None)
+        if callable(method):
+            setattr(garmin, name, _with_429_retry(method))
+    return garmin
 
 
 def _load_tokens_from_env() -> dict | None:
@@ -130,7 +185,7 @@ def init_clients(settings: Settings) -> Clients:
             garmin = _init_garmin_with_tokens(tokens)
             logger.info("Garmin auth successful (GARMIN_TOKENS secret, user: %s)", garmin.display_name)
             _save_tokens_to_disk(tokens)
-            return Clients(garmin=garmin, notion=NotionClient(auth=settings.notion_token))
+            return Clients(garmin=_wrap_garmin_retries(garmin), notion=NotionClient(auth=settings.notion_token))
         except Exception as e:
             logger.warning("GARMIN_TOKENS failed: %s", e)
 
@@ -141,7 +196,7 @@ def init_clients(settings: Settings) -> Clients:
             garmin = _init_garmin_with_tokens(tokens)
             logger.info("Garmin auth successful (cached tokens, user: %s)", garmin.display_name)
             _save_tokens_to_disk(tokens)
-            return Clients(garmin=garmin, notion=NotionClient(auth=settings.notion_token))
+            return Clients(garmin=_wrap_garmin_retries(garmin), notion=NotionClient(auth=settings.notion_token))
         except Exception as e:
             logger.warning("Cached tokens failed: %s", e)
 
@@ -158,7 +213,7 @@ def init_clients(settings: Settings) -> Clients:
                 garmin.garth.dump(str(TOKENSTORE_DIR))
             except Exception:
                 pass
-            return Clients(garmin=garmin, notion=NotionClient(auth=settings.notion_token))
+            return Clients(garmin=_wrap_garmin_retries(garmin), notion=NotionClient(auth=settings.notion_token))
         except Exception as e:
             if attempt < max_retries and "429" in str(e):
                 wait = 30 * attempt

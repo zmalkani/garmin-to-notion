@@ -93,7 +93,7 @@ def main() -> None:
         sync_summary(notion, settings)
         return
 
-    from garmin_to_notion.clients import init_clients
+    from garmin_to_notion.clients import GarminRateLimitError, init_clients
     from garmin_to_notion.syncers.activities import sync_activities
     from garmin_to_notion.syncers.daily_steps import sync_daily_steps
     from garmin_to_notion.syncers.personal_records import sync_personal_records
@@ -131,6 +131,10 @@ def main() -> None:
         try:
             logger.info("Starting %s sync...", cmd)
             sync_map[cmd]()
+        except GarminRateLimitError as e:
+            # Transient Garmin 429 that outlasted retries — skip this run
+            # rather than failing the workflow; the next scheduled run retries.
+            logger.warning("Skipping %s sync, Garmin rate limit persists: %s", cmd, e)
         except Exception as e:
             logger.error("Error during %s sync: %s", cmd, e, exc_info=args.verbose)
             if args.command != "all":
