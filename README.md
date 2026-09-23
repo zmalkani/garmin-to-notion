@@ -194,8 +194,7 @@ Garmin rate-limits API calls per account/IP. This happens when the sync runs too
 To recover:
 1. **Pause the schedule for ~24 hours** — go to **Actions → Garmin to Notion Sync → ⋯ → Disable workflow**, then re-enable it the next day. This lets Garmin's rate limit reset.
 2. **Keep the default 3x/day schedule** (`0 6,14,22 * * *`). Avoid running more often than that.
-3. Avoid manual reruns during the cooldown window — they perform the same OAuth exchange and can keep the limit tripped.
-4. If it still fails after the cooldown, regenerate your tokens locally (`python scripts/generate_tokens.py`) and update the `GARMIN_TOKENS` secret.
+3. If it still fails after the cooldown, regenerate your tokens locally (`python scripts/generate_tokens.py`) and update the `GARMIN_TOKENS` secret.
 
 Transient 429s are retried automatically with backoff; if Garmin is still limiting after the retries, that run is skipped with a warning (not a failure) and the next scheduled run tries again.
 
