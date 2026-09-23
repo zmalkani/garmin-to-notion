@@ -13,7 +13,6 @@ from pathlib import Path
 
 import requests
 from garminconnect import Garmin as GarminClient
-from garminconnect import GarminConnectTooManyRequestsError
 from notion_client import Client as NotionClient
 
 from garmin_to_notion.config import Settings
@@ -39,19 +38,7 @@ class Clients:
 
 def _is_rate_limit(exc: BaseException) -> bool:
     """Check if an exception is a Garmin HTTP 429 rate-limit error."""
-    if isinstance(exc, GarminConnectTooManyRequestsError):
-        return True
-
-    if isinstance(exc, requests.exceptions.HTTPError):
-        status = getattr(getattr(exc, "response", None), "status_code", None)
-        return status == 429 or "429" in str(exc)
-
-    status = getattr(getattr(exc, "response", None), "status_code", None)
-    wrapped_status = getattr(getattr(getattr(exc, "error", None), "response", None), "status_code", None)
-    message = str(exc).lower()
-    return status == 429 or wrapped_status == 429 or (
-        "429" in message and ("too many requests" in message or "rate limit" in message)
-    )
+    return isinstance(exc, requests.exceptions.HTTPError) and "429" in str(exc)
 
 
 def _with_429_retry(func):
