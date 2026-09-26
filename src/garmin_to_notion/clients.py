@@ -19,7 +19,6 @@ from garmin_to_notion.config import Settings
 
 logger = logging.getLogger(__name__)
 
-TOKENSTORE_DIR = Path(os.getenv("GARMIN_TOKENSTORE", "~/.garmin_tokens")).expanduser()
 TOKEN_REFRESH_INSTRUCTIONS = (
     "Unable to authenticate with Garmin using GARMIN_TOKENS or cached token files. "
     "Regenerate tokens locally with `python scripts/generate_tokens.py` or "
@@ -40,6 +39,10 @@ class GarminRateLimitError(Exception):
 class Clients:
     garmin: GarminClient
     notion: NotionClient
+
+
+def _tokenstore_dir() -> Path:
+    return Path(os.getenv("GARMIN_TOKENSTORE", "~/.garmin_tokens")).expanduser()
 
 
 def _is_rate_limit(exc: BaseException) -> bool:
@@ -103,8 +106,9 @@ def _load_tokens_from_env() -> dict | None:
 
 def _load_tokens_from_disk() -> dict | None:
     """Load OAuth tokens from disk (saved by browser_login.py or previous runs)."""
-    oauth1_path = TOKENSTORE_DIR / "oauth1_token.json"
-    oauth2_path = TOKENSTORE_DIR / "oauth2_token.json"
+    tokenstore_dir = _tokenstore_dir()
+    oauth1_path = tokenstore_dir / "oauth1_token.json"
+    oauth2_path = tokenstore_dir / "oauth2_token.json"
     if not oauth1_path.exists() or not oauth2_path.exists():
         return None
     try:
@@ -119,10 +123,11 @@ def _load_tokens_from_disk() -> dict | None:
 def _save_tokens_to_disk(tokens: dict) -> None:
     """Save OAuth tokens to disk for reuse across runs."""
     try:
-        TOKENSTORE_DIR.mkdir(parents=True, exist_ok=True)
-        (TOKENSTORE_DIR / "oauth1_token.json").write_text(json.dumps(tokens["oauth1"], indent=2))
-        (TOKENSTORE_DIR / "oauth2_token.json").write_text(json.dumps(tokens["oauth2"], indent=2))
-        logger.info("Tokens saved to %s", TOKENSTORE_DIR)
+        tokenstore_dir = _tokenstore_dir()
+        tokenstore_dir.mkdir(parents=True, exist_ok=True)
+        (tokenstore_dir / "oauth1_token.json").write_text(json.dumps(tokens["oauth1"], indent=2))
+        (tokenstore_dir / "oauth2_token.json").write_text(json.dumps(tokens["oauth2"], indent=2))
+        logger.info("Tokens saved to %s", tokenstore_dir)
     except Exception as e:
         logger.warning("Failed to save tokens: %s", e)
 

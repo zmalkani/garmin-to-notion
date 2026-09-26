@@ -5,8 +5,8 @@ from __future__ import annotations
 import os
 import sys
 from dataclasses import dataclass
-from pathlib import Path
 from zoneinfo import ZoneInfo
+from pathlib import Path
 
 from dotenv import load_dotenv
 
@@ -14,7 +14,6 @@ load_dotenv()
 
 # Existing Notion database: NEW training log
 DEFAULT_ACTIVITIES_DB_ID = "3e1382a3-8814-80a7-b1c8-fd71dbda2d5f"
-TOKENSTORE_DIR = Path(os.getenv("GARMIN_TOKENSTORE", "~/.garmin_tokens")).expanduser()
 
 
 @dataclass(frozen=True)
@@ -56,9 +55,13 @@ class Settings:
         return replace(self, **overrides)
 
 
+def _tokenstore_dir() -> Path:
+    return Path(os.getenv("GARMIN_TOKENSTORE", "~/.garmin_tokens")).expanduser()
+
+
 def _has_cached_garmin_tokens() -> bool:
     return all(
-        (TOKENSTORE_DIR / filename).exists()
+        (_tokenstore_dir() / filename).exists()
         for filename in ("oauth1_token.json", "oauth2_token.json")
     )
 
@@ -73,9 +76,10 @@ def load_settings(require_garmin: bool = True) -> Settings:
         sys.exit(1)
 
     if require_garmin and not os.getenv("GARMIN_TOKENS") and not _has_cached_garmin_tokens():
+        tokenstore_dir = _tokenstore_dir()
         print(
             "Error: Missing Garmin auth source. Set GARMIN_TOKENS or create cached token "
-            f"files in {TOKENSTORE_DIR} by generating tokens locally."
+            f"files in {tokenstore_dir} by generating tokens locally."
         )
         print(
             "Run `python scripts/generate_tokens.py` or `python scripts/browser_login.py`, "

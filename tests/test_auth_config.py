@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import os
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
 from garmin_to_notion.clients import TOKEN_REFRESH_INSTRUCTIONS, init_clients
-from garmin_to_notion.config import Settings, load_settings
+from garmin_to_notion.config import Settings, _has_cached_garmin_tokens, load_settings
 
 
 class LoadSettingsTests(unittest.TestCase):
@@ -44,6 +46,15 @@ class LoadSettingsTests(unittest.TestCase):
             with patch("garmin_to_notion.config._has_cached_garmin_tokens", return_value=False):
                 with self.assertRaises(SystemExit):
                     load_settings()
+
+    def test_cached_token_detection_uses_current_garmin_tokenstore_env(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            tokenstore = Path(temp_dir)
+            (tokenstore / "oauth1_token.json").write_text("{}")
+            (tokenstore / "oauth2_token.json").write_text("{}")
+
+            with patch.dict(os.environ, {"GARMIN_TOKENSTORE": temp_dir}, clear=False):
+                self.assertTrue(_has_cached_garmin_tokens())
 
 
 class InitClientsTests(unittest.TestCase):
