@@ -51,9 +51,10 @@ Go to your fork's **Settings → Secrets and variables → Actions → Secrets**
 
 | Secret | Description |
 |---|---|
-| `GARMIN_EMAIL` | Your Garmin Connect email |
-| `GARMIN_PASSWORD` | Your Garmin Connect password |
+| `GARMIN_TOKENS` | Base64 Garmin token bundle generated locally |
 | `NOTION_TOKEN` | Your Notion integration token |
+
+Generate `GARMIN_TOKENS` locally with your Garmin email/password, then store only the generated token bundle in GitHub Actions. Scheduled sync runs do **not** use `GARMIN_EMAIL` or `GARMIN_PASSWORD` directly.
 
 ### Step 5: Set Variables (optional)
 
@@ -109,9 +110,10 @@ Activities, Personal Records, Daily Steps, and Sleep are synced independently fr
 
 | Secret | Description |
 |---|---|
-| `GARMIN_EMAIL` | Your Garmin Connect email |
-| `GARMIN_PASSWORD` | Your Garmin Connect password |
+| `GARMIN_TOKENS` | Base64 Garmin token bundle generated locally |
 | `NOTION_TOKEN` | Your Notion integration token |
+
+`GARMIN_EMAIL` and `GARMIN_PASSWORD` are only needed on your local machine when generating or refreshing Garmin tokens. They are not used by the scheduled GitHub Actions sync.
 
 ### GitHub Variables (optional)
 
@@ -142,7 +144,11 @@ pip install -r requirements.txt
 
 # Copy and configure environment
 cp .env.example .env
-# Edit .env with your credentials
+# Edit .env with NOTION_TOKEN and local Garmin credentials for token generation
+
+# Generate Garmin tokens before your first Garmin-backed sync
+python scripts/generate_tokens.py
+# or: python scripts/browser_login.py
 
 # Run all syncs
 PYTHONPATH=src python -m garmin_to_notion all
@@ -162,6 +168,8 @@ PYTHONPATH=src python -m garmin_to_notion cleanup --execute
 # Verbose output
 PYTHONPATH=src python -m garmin_to_notion all -v
 ```
+
+Garmin-backed local syncs require `GARMIN_TOKENS` or cached token files in `~/.garmin_tokens`. `GARMIN_EMAIL` and `GARMIN_PASSWORD` are only used locally to generate or refresh those tokens.
 
 ## Project Structure
 
@@ -197,6 +205,9 @@ To recover:
 3. If it still fails after the cooldown, regenerate your tokens locally (`python scripts/generate_tokens.py`) and update the `GARMIN_TOKENS` secret.
 
 Transient 429s are retried automatically with backoff; if Garmin is still limiting after the retries, that run is skipped with a warning (not a failure) and the next scheduled run tries again.
+
+### Sync fails with Garmin authentication errors
+Scheduled and manual GitHub Actions syncs authenticate only with `GARMIN_TOKENS` (and any cached token files created from that bundle). If Garmin auth fails, regenerate tokens locally with `python scripts/generate_tokens.py` or `python scripts/browser_login.py`, then update the `GARMIN_TOKENS` GitHub secret before rerunning the workflow.
 
 ### Charts show errors
 Run the Notion AI update prompt ([`docs/notion-ai-update-prompt.txt`](docs/notion-ai-update-prompt.txt)) to recreate all views and charts. Make sure your databases have data first — charts won't render on empty databases.

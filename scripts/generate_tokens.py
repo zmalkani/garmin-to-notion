@@ -3,8 +3,8 @@
 Usage:
     python scripts/generate_tokens.py
 
-Reads GARMIN_EMAIL and GARMIN_PASSWORD from .env file.
-Outputs a base64 token string to set as the GARMIN_TOKENS GitHub secret.
+Reads GARMIN_EMAIL and GARMIN_PASSWORD from .env for local token generation only.
+Outputs a base64 token string to set as the GARMIN_TOKENS GitHub secret used by runtime syncs.
 """
 
 import os
@@ -34,5 +34,6 @@ print("\nSet this as your GARMIN_TOKENS GitHub secret:")
 print("=" * 60)
 print(token_str)
 print("=" * 60)
-print(f"\nRun: gh secret set GARMIN_TOKENS --repo fly-labs/garmin-to-notion")
+print("\nRuntime syncs use GARMIN_TOKENS only; Garmin email/password stay local.")
+print(f"Run: gh secret set GARMIN_TOKENS --repo zmalkani/garmin-to-notion")
 print("Then paste the token string above when prompted.")

@@ -6,6 +6,7 @@ import os
 import sys
 from dataclasses import dataclass
 from zoneinfo import ZoneInfo
+from pathlib import Path
 
 from dotenv import load_dotenv
 
@@ -17,8 +18,6 @@ DEFAULT_ACTIVITIES_DB_ID = "3e1382a3-8814-80a7-b1c8-fd71dbda2d5f"
 
 @dataclass(frozen=True)
 class Settings:
-    garmin_email: str
-    garmin_password: str
     notion_token: str
     activities_db_id: str | None
     pr_db_id: str | None
@@ -56,15 +55,36 @@ class Settings:
         return replace(self, **overrides)
 
 
+def _tokenstore_dir() -> Path:
+    return Path(os.getenv("GARMIN_TOKENSTORE", "~/.garmin_tokens")).expanduser()
+
+
+def _has_cached_garmin_tokens() -> bool:
+    return all(
+        (_tokenstore_dir() / filename).exists()
+        for filename in ("oauth1_token.json", "oauth2_token.json")
+    )
+
+
 def load_settings(require_garmin: bool = True) -> Settings:
     required = ["NOTION_TOKEN"]
-    if require_garmin:
-        required += ["GARMIN_EMAIL", "GARMIN_PASSWORD"]
 
     missing = [var for var in required if not os.getenv(var)]
     if missing:
         print(f"Error: Missing required environment variables: {', '.join(missing)}")
         print("Copy .env.example to .env and fill in your values.")
+        sys.exit(1)
+
+    if require_garmin and not os.getenv("GARMIN_TOKENS") and not _has_cached_garmin_tokens():
+        tokenstore_dir = _tokenstore_dir()
+        print(
+            "Error: Missing Garmin auth source. Set GARMIN_TOKENS or create cached token "
+            f"files in {tokenstore_dir} by generating tokens locally."
+        )
+        print(
+            "Run `python scripts/generate_tokens.py` or `python scripts/browser_login.py`, "
+            "then update the GARMIN_TOKENS GitHub secret for scheduled syncs."
+        )
         sys.exit(1)
 
     tz_name = os.getenv("TIMEZONE", "America/Toronto")
@@ -75,8 +95,6 @@ def load_settings(require_garmin: bool = True) -> Settings:
         sys.exit(1)
 
     return Settings(
-        garmin_email=os.getenv("GARMIN_EMAIL", ""),
-        garmin_password=os.getenv("GARMIN_PASSWORD", ""),
         notion_token=os.environ["NOTION_TOKEN"],
         activities_db_id=os.getenv("NOTION_DB_ID", DEFAULT_ACTIVITIES_DB_ID),
         pr_db_id=os.getenv("NOTION_PR_DB_ID"),
