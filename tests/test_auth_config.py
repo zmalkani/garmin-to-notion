@@ -110,6 +110,18 @@ class InitClientsTests(unittest.TestCase):
         self.assertEqual(str(exc.exception), TOKEN_REFRESH_INSTRUCTIONS)
         garmin_client_cls.assert_not_called()
 
+    def test_init_clients_exits_with_refresh_instructions_when_no_tokens_exist(self) -> None:
+        with (
+            patch("garmin_to_notion.clients._load_tokens_from_env", return_value=None),
+            patch("garmin_to_notion.clients._load_tokens_from_disk", return_value=None),
+            patch("garmin_to_notion.clients.GarminClient") as garmin_client_cls,
+        ):
+            with self.assertRaises(SystemExit) as exc:
+                init_clients(self.settings)
+
+        self.assertEqual(str(exc.exception), TOKEN_REFRESH_INSTRUCTIONS)
+        garmin_client_cls.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()
