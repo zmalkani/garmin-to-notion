@@ -12,6 +12,7 @@ from garmin_to_notion.config import Settings, load_settings
 class LoadSettingsTests(unittest.TestCase):
     def test_load_settings_allows_sync_without_garmin_credentials(self) -> None:
         env = {
+            "GARMIN_TOKENS": "token_bundle",
             "NOTION_TOKEN": "ntn_test",
             "TIMEZONE": "America/Toronto",
         }
@@ -21,6 +22,28 @@ class LoadSettingsTests(unittest.TestCase):
 
         self.assertEqual(settings.notion_token, "ntn_test")
         self.assertEqual(settings.timezone, ZoneInfo("America/Toronto"))
+
+    def test_load_settings_allows_notion_only_commands_without_garmin_auth(self) -> None:
+        env = {
+            "NOTION_TOKEN": "ntn_test",
+            "TIMEZONE": "America/Toronto",
+        }
+
+        with patch.dict(os.environ, env, clear=True):
+            settings = load_settings(require_garmin=False)
+
+        self.assertEqual(settings.notion_token, "ntn_test")
+
+    def test_load_settings_requires_token_source_for_garmin_syncs(self) -> None:
+        env = {
+            "NOTION_TOKEN": "ntn_test",
+            "TIMEZONE": "America/Toronto",
+        }
+
+        with patch.dict(os.environ, env, clear=True):
+            with patch("garmin_to_notion.config._has_cached_garmin_tokens", return_value=False):
+                with self.assertRaises(SystemExit):
+                    load_settings()
 
 
 class InitClientsTests(unittest.TestCase):

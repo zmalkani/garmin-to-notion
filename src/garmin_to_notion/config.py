@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import sys
 from dataclasses import dataclass
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
@@ -13,6 +14,7 @@ load_dotenv()
 
 # Existing Notion database: NEW training log
 DEFAULT_ACTIVITIES_DB_ID = "3e1382a3-8814-80a7-b1c8-fd71dbda2d5f"
+TOKENSTORE_DIR = Path(os.getenv("GARMIN_TOKENSTORE", "~/.garmin_tokens")).expanduser()
 
 
 @dataclass(frozen=True)
@@ -54,13 +56,31 @@ class Settings:
         return replace(self, **overrides)
 
 
-def load_settings() -> Settings:
+def _has_cached_garmin_tokens() -> bool:
+    return all(
+        (TOKENSTORE_DIR / filename).exists()
+        for filename in ("oauth1_token.json", "oauth2_token.json")
+    )
+
+
+def load_settings(require_garmin: bool = True) -> Settings:
     required = ["NOTION_TOKEN"]
 
     missing = [var for var in required if not os.getenv(var)]
     if missing:
         print(f"Error: Missing required environment variables: {', '.join(missing)}")
         print("Copy .env.example to .env and fill in your values.")
+        sys.exit(1)
+
+    if require_garmin and not os.getenv("GARMIN_TOKENS") and not _has_cached_garmin_tokens():
+        print(
+            "Error: Missing Garmin auth source. Set GARMIN_TOKENS or create cached token "
+            f"files in {TOKENSTORE_DIR} by generating tokens locally."
+        )
+        print(
+            "Run `python scripts/generate_tokens.py` or `python scripts/browser_login.py`, "
+            "then update the GARMIN_TOKENS GitHub secret for scheduled syncs."
+        )
         sys.exit(1)
 
     tz_name = os.getenv("TIMEZONE", "America/Toronto")
