@@ -17,8 +17,6 @@ DEFAULT_ACTIVITIES_DB_ID = "3e1382a3-8814-80a7-b1c8-fd71dbda2d5f"
 
 @dataclass(frozen=True)
 class Settings:
-    garmin_email: str
-    garmin_password: str
     notion_token: str
     activities_db_id: str | None
     pr_db_id: str | None
@@ -58,8 +56,6 @@ class Settings:
 
 def load_settings(require_garmin: bool = True) -> Settings:
     required = ["NOTION_TOKEN"]
-    if require_garmin:
-        required += ["GARMIN_EMAIL", "GARMIN_PASSWORD"]
 
     missing = [var for var in required if not os.getenv(var)]
     if missing:
@@ -75,8 +71,6 @@ def load_settings(require_garmin: bool = True) -> Settings:
         sys.exit(1)
 
     return Settings(
-        garmin_email=os.getenv("GARMIN_EMAIL", ""),
-        garmin_password=os.getenv("GARMIN_PASSWORD", ""),
         notion_token=os.environ["NOTION_TOKEN"],
         activities_db_id=os.getenv("NOTION_DB_ID", DEFAULT_ACTIVITIES_DB_ID),
         pr_db_id=os.getenv("NOTION_PR_DB_ID"),

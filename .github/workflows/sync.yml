@@ -32,8 +32,6 @@ jobs:
 
       - name: Run Garmin activity sync
         env:
-          GARMIN_EMAIL: ${{ secrets.GARMIN_EMAIL }}
-          GARMIN_PASSWORD: ${{ secrets.GARMIN_PASSWORD }}
           GARMIN_TOKENS: ${{ secrets.GARMIN_TOKENS }}
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
           TIMEZONE: ${{ vars.TIMEZONE || 'America/Toronto' }}

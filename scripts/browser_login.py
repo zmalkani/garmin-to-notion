@@ -9,7 +9,7 @@ Usage:
     python scripts/browser_login.py
 
 After success, run:
-    gh secret set GARMIN_TOKENS --repo fly-labs/garmin-to-notion
+    gh secret set GARMIN_TOKENS --repo zmalkani/garmin-to-notion
     (paste the base64 token string)
 """
 
