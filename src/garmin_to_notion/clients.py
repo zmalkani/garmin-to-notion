@@ -208,7 +208,10 @@ def init_clients(settings: Settings) -> Clients:
             logger.warning("Cached tokens failed: %s", e)
             last_error = e
 
-    logger.error(TOKEN_REFRESH_INSTRUCTIONS)
+    if last_error is not None:
+        logger.error("%s Last Garmin auth error: %s", TOKEN_REFRESH_INSTRUCTIONS, last_error)
+    else:
+        logger.error(TOKEN_REFRESH_INSTRUCTIONS)
     raise SystemExit(TOKEN_REFRESH_INSTRUCTIONS) from last_error
 
 
