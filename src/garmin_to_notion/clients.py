@@ -174,9 +174,9 @@ def init_clients(settings: Settings) -> Clients:
     Auth priority:
     1. GARMIN_TOKENS env var (base64 JSON bundle from browser_login.py)
     2. Cached tokens on disk (~/.garmin_tokens)
-    3. Fresh credential login with retry + backoff (last resort)
     """
     logger.info("Authenticating with Garmin Connect...")
+    auth_errors: list[str] = []
 
     # 1. Try GARMIN_TOKENS env var
     tokens = _load_tokens_from_env()
@@ -188,6 +188,7 @@ def init_clients(settings: Settings) -> Clients:
             return Clients(garmin=_wrap_garmin_retries(garmin), notion=NotionClient(auth=settings.notion_token))
         except Exception as e:
             logger.warning("GARMIN_TOKENS failed: %s", e)
+            auth_errors.append(f"GARMIN_TOKENS failed: {e}")
 
     # 2. Try cached tokens on disk
     tokens = _load_tokens_from_disk()
@@ -199,30 +200,15 @@ def init_clients(settings: Settings) -> Clients:
             return Clients(garmin=_wrap_garmin_retries(garmin), notion=NotionClient(auth=settings.notion_token))
         except Exception as e:
             logger.warning("Cached tokens failed: %s", e)
+            auth_errors.append(f"Cached tokens failed: {e}")
 
-    # 3. Fresh login with retry (last resort)
-    max_retries = 3
-    for attempt in range(1, max_retries + 1):
-        try:
-            garmin = GarminClient(settings.garmin_email, settings.garmin_password)
-            garmin.login()
-            logger.info("Garmin auth successful (fresh login)")
-            # Save garth tokens for next time
-            try:
-                TOKENSTORE_DIR.mkdir(parents=True, exist_ok=True)
-                garmin.garth.dump(str(TOKENSTORE_DIR))
-            except Exception:
-                pass
-            return Clients(garmin=_wrap_garmin_retries(garmin), notion=NotionClient(auth=settings.notion_token))
-        except Exception as e:
-            if attempt < max_retries and "429" in str(e):
-                wait = 30 * attempt
-                logger.warning("Rate limited (attempt %d/%d), waiting %ds...", attempt, max_retries, wait)
-                time.sleep(wait)
-            else:
-                logger.error("Failed to authenticate (attempt %d/%d): %s", attempt, max_retries, e)
-                if attempt == max_retries:
-                    raise SystemExit(1) from e
+    details = " | ".join(auth_errors) if auth_errors else "No valid Garmin tokens found in GARMIN_TOKENS or token cache."
+    logger.error("Garmin token authentication failed: %s", details)
+    raise SystemExit(
+        "Garmin authentication failed using token-based auth only. "
+        "Regenerate tokens locally (`python scripts/generate_tokens.py`) and update GARMIN_TOKENS. "
+        "Username/password fallback login has been removed."
+    )
 
 
 def init_notion_only(settings: Settings) -> NotionClient:

@@ -51,9 +51,10 @@ Go to your fork's **Settings → Secrets and variables → Actions → Secrets**
 
 | Secret | Description |
 |---|---|
-| `GARMIN_EMAIL` | Your Garmin Connect email |
-| `GARMIN_PASSWORD` | Your Garmin Connect password |
+| `GARMIN_TOKENS` | Garmin OAuth token bundle generated locally (`python scripts/generate_tokens.py`) |
 | `NOTION_TOKEN` | Your Notion integration token |
+
+To generate `GARMIN_TOKENS`, run `python scripts/generate_tokens.py` locally with `GARMIN_EMAIL` and `GARMIN_PASSWORD` set in your local `.env`, then copy the printed token string into the GitHub secret.
 
 ### Step 5: Set Variables (optional)
 
@@ -109,8 +110,7 @@ Activities, Personal Records, Daily Steps, and Sleep are synced independently fr
 
 | Secret | Description |
 |---|---|
-| `GARMIN_EMAIL` | Your Garmin Connect email |
-| `GARMIN_PASSWORD` | Your Garmin Connect password |
+| `GARMIN_TOKENS` | Garmin OAuth token bundle generated locally (`python scripts/generate_tokens.py`) |
 | `NOTION_TOKEN` | Your Notion integration token |
 
 ### GitHub Variables (optional)
@@ -142,7 +142,8 @@ pip install -r requirements.txt
 
 # Copy and configure environment
 cp .env.example .env
-# Edit .env with your credentials
+# Edit .env with NOTION_TOKEN and GARMIN_TOKENS
+# GARMIN_EMAIL/GARMIN_PASSWORD are only needed when regenerating tokens locally
 
 # Run all syncs
 PYTHONPATH=src python -m garmin_to_notion all
@@ -195,6 +196,8 @@ To recover:
 1. **Pause the schedule for ~24 hours** — go to **Actions → Garmin to Notion Sync → ⋯ → Disable workflow**, then re-enable it the next day. This lets Garmin's rate limit reset.
 2. **Keep the default 3x/day schedule** (`0 6,14,22 * * *`). Avoid running more often than that.
 3. If it still fails after the cooldown, regenerate your tokens locally (`python scripts/generate_tokens.py`) and update the `GARMIN_TOKENS` secret.
+
+Sync runs now use token-only auth (no Garmin email/password fallback). If `GARMIN_TOKENS` is invalid or expired, regenerate tokens and update the secret before retrying.
 
 Transient 429s are retried automatically with backoff; if Garmin is still limiting after the retries, that run is skipped with a warning (not a failure) and the next scheduled run tries again.
 
