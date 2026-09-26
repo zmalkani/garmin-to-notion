@@ -144,7 +144,11 @@ pip install -r requirements.txt
 
 # Copy and configure environment
 cp .env.example .env
-# Edit .env with your tokens and local credentials if you need to regenerate GARMIN_TOKENS
+# Edit .env with NOTION_TOKEN and local Garmin credentials for token generation
+
+# Generate Garmin tokens before your first Garmin-backed sync
+python scripts/generate_tokens.py
+# or: python scripts/browser_login.py
 
 # Run all syncs
 PYTHONPATH=src python -m garmin_to_notion all
@@ -164,6 +168,8 @@ PYTHONPATH=src python -m garmin_to_notion cleanup --execute
 # Verbose output
 PYTHONPATH=src python -m garmin_to_notion all -v
 ```
+
+Garmin-backed local syncs require `GARMIN_TOKENS` or cached token files in `~/.garmin_tokens`. `GARMIN_EMAIL` and `GARMIN_PASSWORD` are only used locally to generate or refresh those tokens.
 
 ## Project Structure
 
