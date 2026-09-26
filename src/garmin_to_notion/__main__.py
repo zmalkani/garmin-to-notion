@@ -48,9 +48,7 @@ def main() -> None:
     setup_logging(level=logging.DEBUG if args.verbose else logging.INFO)
     logger = logging.getLogger(__name__)
 
-    # Cleanup and summary only need Notion, not Garmin
-    require_garmin = args.command not in ("cleanup", "summary")
-    settings = load_settings(require_garmin=require_garmin)
+    settings = load_settings()
 
     # Auto-discover only the database IDs needed by the selected command.
     required_db_fields = {

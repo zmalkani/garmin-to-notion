@@ -54,7 +54,7 @@ class Settings:
         return replace(self, **overrides)
 
 
-def load_settings(require_garmin: bool = True) -> Settings:
+def load_settings() -> Settings:
     required = ["NOTION_TOKEN"]
 
     missing = [var for var in required if not os.getenv(var)]
