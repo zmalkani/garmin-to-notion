@@ -93,7 +93,7 @@ def main() -> None:
         sync_summary(notion, settings)
         return
 
-    from garmin_to_notion.clients import GarminRateLimitError, init_clients
+    from garmin_to_notion.clients import GarminRateLimitError, GarminTokenAuthError, init_clients
     from garmin_to_notion.syncers.activities import sync_activities
     from garmin_to_notion.syncers.daily_steps import sync_daily_steps
     from garmin_to_notion.syncers.personal_records import sync_personal_records
@@ -101,7 +101,11 @@ def main() -> None:
     from garmin_to_notion.syncers.summary import sync_summary
     from garmin_to_notion.syncers.workouts import sync_workouts
 
-    clients = init_clients(settings)
+    try:
+        clients = init_clients(settings)
+    except GarminTokenAuthError as e:
+        print(f"Error: {e}")
+        sys.exit(1)
 
     sync_map = {
         "activities": lambda: sync_activities(clients.garmin, clients.notion, settings),
