@@ -90,7 +90,7 @@ def _build_properties(activity: dict, settings: Settings) -> dict:
                 "end": local_end.isoformat(),
             }
         },
-        "Dist. (km)": {"number": distance_km},
+        "km": {"number": distance_km},
         "volume (h)": {"number": round(duration_seconds / 3600, 4)},
         "Garmin ID": {"number": activity_id},
         "Activity link": {
