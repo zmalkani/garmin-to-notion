@@ -6,7 +6,7 @@ Sync your Garmin fitness data to beautiful Notion databases — activities, pers
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
 ![Sync: GitHub Actions](https://img.shields.io/badge/sync-GitHub%20Actions-purple)
 
-## Features
+## Features:
 
 - **Activities** — distance, pace, power, HR, training effect, with emoji icons and heatmap properties
 - **Personal Records** — fastest 1K, 5K, 10K, longest run/ride, and more
