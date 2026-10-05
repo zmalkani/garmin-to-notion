@@ -168,61 +168,49 @@ def _init_garmin_with_tokens(tokens: dict) -> GarminClient:
     return garmin
 
 
+class GarminTokenAuthError(Exception):
+    """Raised when token-based Garmin authentication is unavailable or unusable."""
+
+
+_REGENERATE_HINT = (
+    "Regenerate tokens with `python scripts/browser_login.py` (or "
+    "`scripts/generate_tokens.py`) and update the GARMIN_TOKENS secret. "
+    "Password login is intentionally disabled."
+)
+
+
 def init_clients(settings: Settings) -> Clients:
     """Initialize and authenticate both Garmin and Notion clients.
 
-    Auth priority:
+    Token-based auth only; there is no password/SSO fallback:
     1. GARMIN_TOKENS env var (base64 JSON bundle from browser_login.py)
-    2. Cached tokens on disk (~/.garmin_tokens)
-    3. Fresh credential login with retry + backoff (last resort)
+    2. Cached tokens on disk (~/.garmin_tokens), only if GARMIN_TOKENS is unset
+    Raises GarminTokenAuthError if tokens are missing, malformed or rejected.
     """
     logger.info("Authenticating with Garmin Connect...")
 
-    # 1. Try GARMIN_TOKENS env var
-    tokens = _load_tokens_from_env()
-    if tokens:
-        try:
-            garmin = _init_garmin_with_tokens(tokens)
-            logger.info("Garmin auth successful (GARMIN_TOKENS secret, user: %s)", garmin.display_name)
-            _save_tokens_to_disk(tokens)
-            return Clients(garmin=_wrap_garmin_retries(garmin), notion=NotionClient(auth=settings.notion_token))
-        except Exception as e:
-            logger.warning("GARMIN_TOKENS failed: %s", e)
+    if os.getenv("GARMIN_TOKENS", "").strip():
+        tokens = _load_tokens_from_env()
+        source = "GARMIN_TOKENS secret"
+        if not tokens:
+            raise GarminTokenAuthError(
+                f"GARMIN_TOKENS is empty, malformed or missing oauth1/oauth2. {_REGENERATE_HINT}"
+            )
+    else:
+        tokens = _load_tokens_from_disk()
+        source = "cached tokens"
+        if not tokens:
+            raise GarminTokenAuthError(f"No Garmin tokens found (GARMIN_TOKENS not set). {_REGENERATE_HINT}")
 
-    # 2. Try cached tokens on disk
-    tokens = _load_tokens_from_disk()
-    if tokens:
-        try:
-            garmin = _init_garmin_with_tokens(tokens)
-            logger.info("Garmin auth successful (cached tokens, user: %s)", garmin.display_name)
-            _save_tokens_to_disk(tokens)
-            return Clients(garmin=_wrap_garmin_retries(garmin), notion=NotionClient(auth=settings.notion_token))
-        except Exception as e:
-            logger.warning("Cached tokens failed: %s", e)
+    try:
+        garmin = _init_garmin_with_tokens(tokens)
+        garmin.garth.connectapi("/userprofile-service/socialProfile")
+    except Exception as e:
+        raise GarminTokenAuthError(f"{source} are invalid or expired ({e}). {_REGENERATE_HINT}") from e
 
-    # 3. Fresh login with retry (last resort)
-    max_retries = 3
-    for attempt in range(1, max_retries + 1):
-        try:
-            garmin = GarminClient(settings.garmin_email, settings.garmin_password)
-            garmin.login()
-            logger.info("Garmin auth successful (fresh login)")
-            # Save garth tokens for next time
-            try:
-                TOKENSTORE_DIR.mkdir(parents=True, exist_ok=True)
-                garmin.garth.dump(str(TOKENSTORE_DIR))
-            except Exception:
-                pass
-            return Clients(garmin=_wrap_garmin_retries(garmin), notion=NotionClient(auth=settings.notion_token))
-        except Exception as e:
-            if attempt < max_retries and "429" in str(e):
-                wait = 30 * attempt
-                logger.warning("Rate limited (attempt %d/%d), waiting %ds...", attempt, max_retries, wait)
-                time.sleep(wait)
-            else:
-                logger.error("Failed to authenticate (attempt %d/%d): %s", attempt, max_retries, e)
-                if attempt == max_retries:
-                    raise SystemExit(1) from e
+    logger.info("Garmin auth successful (%s, user: %s)", source, garmin.display_name)
+    _save_tokens_to_disk(tokens)
+    return Clients(garmin=_wrap_garmin_retries(garmin), notion=NotionClient(auth=settings.notion_token))
 
 
 def init_notion_only(settings: Settings) -> NotionClient:

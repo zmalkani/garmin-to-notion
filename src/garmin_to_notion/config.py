@@ -58,8 +58,6 @@ class Settings:
 
 def load_settings(require_garmin: bool = True) -> Settings:
     required = ["NOTION_TOKEN"]
-    if require_garmin:
-        required += ["GARMIN_EMAIL", "GARMIN_PASSWORD"]
 
     missing = [var for var in required if not os.getenv(var)]
     if missing:
